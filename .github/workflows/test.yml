@@ -1,0 +1,16 @@
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+      - run: php -l toolsai_check.php
+      - run: php tests/test_php.php
+      - run: bash -n toolsai_check.sh
+      - run: bash tests/test_sh.sh
