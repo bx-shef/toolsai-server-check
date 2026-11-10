@@ -30,5 +30,5 @@ run "svc: заголовок" "только под сервисы" $base TOOLSAI
 ARGS=""
 # код не содержит имён хоста/адресов
 out=$(env $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1 bash toolsai_check.sh | tail -1)
-case $out in TAI1\;*) echo "ok   строка-код";; *) echo "FAIL строка-код: $out"; fail=1;; esac
+case $out in "TAI1;"*) echo "ok   строка-код";; *) echo "FAIL строка-код: $out"; fail=1;; esac
 exit $fail
