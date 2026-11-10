@@ -3,12 +3,18 @@
 # Запуск: sudo bash toolsai_check.sh
 # Пороги — из системных требований Tools AI (три уровня: минимум / средний / с запасом).
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Уровни: ядра / память ГБ / диск ГБ свободно сверх Битрикса
 MIN_CORES=8;  MIN_MEM=16; MIN_DISK=20
 MID_CORES=12; MID_MEM=24; MID_DISK=30
 FUL_CORES=16; FUL_MEM=32; FUL_DISK=50
+
+# Режим --services-only: отдельная ВМ только под сервисы (Битрикс24 на другой ВМ).
+# Уровни — расчёт по таблице требований; уровня «с запасом» нет.
+SVC_MIN_CORES=6;  SVC_MIN_MEM=10; SVC_MIN_DISK=20
+SVC_MID_CORES=10; SVC_MID_MEM=13; SVC_MID_DISK=30
+MODE=all
 
 # Переопределения нужны тестам (подставляют значения вместо чтения системы).
 detect_cores() { [ -n "${TOOLSAI_CHECK_CORES:-}" ] && { echo "$TOOLSAI_CHECK_CORES"; return; }; nproc 2>/dev/null || echo 0; }
@@ -50,11 +56,23 @@ level_of() { # cores mem disk
 }
 level_name() { case $1 in min) echo "минимум";; mid) echo "средний";; full) echo "с запасом";; *) echo "ниже минимума";; esac; }
 
+levels_text() { # cores|mem|disk — пороги текущего режима
+  local k=$1 a b c
+  case $k in cores) a=$MIN_CORES; b=$MID_CORES; c=$FUL_CORES;; mem) a=$MIN_MEM; b=$MID_MEM; c=$FUL_MEM;; disk) a="+$MIN_DISK"; b="+$MID_DISK"; c="+$FUL_DISK";; esac
+  if [ "$MODE" = svc ]; then echo "$a / $b"; else echo "$a / $b / $c"; fi
+}
+
 mark() { # ok|warn|fail text
   case $1 in ok) printf '  ✅ %s\n' "$2";; warn) printf '  ⚠  %s\n' "$2";; fail) printf '  ❌ %s\n' "$2";; esac
 }
 
 main() {
+  if [ "${1:-}" = "--services-only" ]; then
+    MODE=svc
+    MIN_CORES=$SVC_MIN_CORES; MIN_MEM=$SVC_MIN_MEM; MIN_DISK=$SVC_MIN_DISK
+    MID_CORES=$SVC_MID_CORES; MID_MEM=$SVC_MID_MEM; MID_DISK=$SVC_MID_DISK
+    FUL_CORES=999; FUL_MEM=9999; FUL_DISK=9999
+  fi
   local cores mem disk avx2 docker virt ports lvl missing=() warns=()
   cores=$(detect_cores); mem=$(detect_mem_gb); disk=$(detect_disk_gb)
   avx2=$(detect_avx2); docker=$(detect_docker); virt=$(detect_virt); ports=$(detect_ports)
@@ -62,10 +80,16 @@ main() {
 
   echo "Tools AI — проверка сервера (toolsai_check.sh $VERSION). Скрипт только читает."
   echo
-  echo "Ресурсы (нужно для минимума / среднего / запаса):"
-  if [ "$cores" -ge $MIN_CORES ]; then mark ok "Ядра: $cores (8 / 12 / 16)"; else mark fail "Ядра: $cores (минимум $MIN_CORES)"; missing+=("ядра: нужно минимум $MIN_CORES, есть $cores"); fi
-  if [ "$mem" -ge $MIN_MEM ]; then mark ok "Память: $mem ГБ (16 / 24 / 32)"; else mark fail "Память: $mem ГБ (минимум $MIN_MEM)"; missing+=("память: нужно минимум $MIN_MEM ГБ, есть $mem"); fi
-  if [ "$disk" -ge $MIN_DISK ]; then mark ok "Диск, свободно: $disk ГБ (+20 / +30 / +50 сверх Битрикса)"; else mark fail "Диск, свободно: $disk ГБ (нужно +$MIN_DISK сверх Битрикса)"; missing+=("диск: нужно минимум +$MIN_DISK ГБ свободно, есть $disk"); fi
+  if [ "$MODE" = svc ]; then
+    echo "Режим: отдельная ВМ только под сервисы (Битрикс24 на другой ВМ)."
+    echo "Ресурсы (нужно для минимума / среднего):"
+  else
+    echo "Режим: Битрикс24 и сервисы на одной ВМ."
+    echo "Ресурсы (нужно для минимума / среднего / запаса):"
+  fi
+  if [ "$cores" -ge $MIN_CORES ]; then mark ok "Ядра: $cores ($(levels_text cores))"; else mark fail "Ядра: $cores (минимум $MIN_CORES)"; missing+=("ядра: нужно минимум $MIN_CORES, есть $cores"); fi
+  if [ "$mem" -ge $MIN_MEM ]; then mark ok "Память: $mem ГБ ($(levels_text mem))"; else mark fail "Память: $mem ГБ (минимум $MIN_MEM)"; missing+=("память: нужно минимум $MIN_MEM ГБ, есть $mem"); fi
+  if [ "$disk" -ge $MIN_DISK ]; then mark ok "Диск, свободно: $disk ГБ ($(levels_text disk))"; else mark fail "Диск, свободно: $disk ГБ (нужно +$MIN_DISK сверх Битрикса)"; missing+=("диск: нужно минимум +$MIN_DISK ГБ свободно, есть $disk"); fi
   if [ "$avx2" = 1 ]; then mark ok "Процессор: AVX2 есть"; else mark fail "Процессор: AVX2 нет (модели не запустятся)"; missing+=("процессор без AVX2: другой хост или тип процессора"); fi
 
   echo
@@ -91,7 +115,7 @@ main() {
   local ok=0; [ ${#missing[@]} -eq 0 ] && ok=1
   echo
   echo "Строка для отправки нам (без имён, адресов и ключей):"
-  echo "TAI1;cpu=$cores;mem=$mem;disk=$disk;avx2=$avx2;docker=$docker;virt=$virt;level=$lvl;ok=$ok"
+  echo "TAI1;mode=$MODE;cpu=$cores;mem=$mem;disk=$disk;avx2=$avx2;docker=$docker;virt=$virt;level=$lvl;ok=$ok"
 }
 
 # Выполняется только при запуске файла, а не при source (тесты).

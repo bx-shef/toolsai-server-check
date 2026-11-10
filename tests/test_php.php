@@ -24,6 +24,7 @@ t('crm 26.1000 новее 26.800', toolsai_check_modules(['ai' => '26.1000.0', '
 t('cron выключен', toolsai_check_cron(false, false)[0][0] === 'warn');
 t('cron включён', toolsai_check_cron(true, true)[0][0] === 'ok');
 t('диск мало', toolsai_check_disk(5.0)[0][0] === 'fail');
+t('диск split: справочно', toolsai_check_disk(5.0, true)[0][0] === 'info');
 t('диск норма', toolsai_check_disk(20.0)[0][0] === 'ok');
 t('память без лимита', toolsai_check_memory('-1')[0][2] === 'без ограничения');
 $net = toolsai_check_network(['a.example' => true, 'b.example' => false, 'c' => null]);

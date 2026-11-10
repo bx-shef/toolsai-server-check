@@ -7,9 +7,11 @@
  * Единственное изменение — кнопка «Удалить файл» удаляет сам скрипт.
  *
  * Необязательный параметр ?model=https://адрес-модели — проверить исходящий HTTPS до модели.
+ * Параметр ?layout=split — Битрикс24 на отдельной ВМ, сервисы на другой: порог диска не применяется
+ * (сервисы проверяются на своей ВМ: sudo bash toolsai_check.sh --services-only).
  */
 
-const TOOLSAI_CHECK_VERSION = '1.0.0';
+const TOOLSAI_CHECK_VERSION = '1.1.0';
 const TOOLSAI_LICENSE_HOST = 'license.bx-shef.by';
 const TOOLSAI_MIN_DISK_GB = 20; // «минимум» из системных требований, свободно сверх Битрикса
 
@@ -66,9 +68,12 @@ function toolsai_check_cron(bool $agentsOnCron, bool $cronDefined): array
         : [toolsai_row('warn', 'Агенты на cron', 'не включено — фоновые задачи модулей идут только по хитам страниц')];
 }
 
-function toolsai_check_disk(float $freeGb): array
+function toolsai_check_disk(float $freeGb, bool $split = false): array
 {
     $text = round($freeGb, 1) . ' ГБ свободно';
+    if ($split) { // Битрикс24 на отдельной ВМ: сервисы стоят на другой, порог не применяется
+        return [toolsai_row('info', 'Диск', $text)];
+    }
     return $freeGb >= TOOLSAI_MIN_DISK_GB
         ? [toolsai_row('ok', 'Диск', $text . ' (нужно +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса)')]
         : [toolsai_row('fail', 'Диск', $text . '; для своих сервисов нужно +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса')];
@@ -199,7 +204,7 @@ function toolsai_run(): void
         ),
         'Сеть' => toolsai_check_network($reach),
         'Сервер' => array_merge(
-            toolsai_check_disk((float)disk_free_space($_SERVER['DOCUMENT_ROOT']) / 1073741824),
+            toolsai_check_disk((float)disk_free_space($_SERVER['DOCUMENT_ROOT']) / 1073741824, ($_GET['layout'] ?? '') === 'split'),
             toolsai_check_memory((string)ini_get('memory_limit'))
         ),
     ];
