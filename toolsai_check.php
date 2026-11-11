@@ -11,7 +11,7 @@
  * (сервисы проверяются на своей ВМ: sudo bash toolsai_check.sh --services-only).
  */
 
-const TOOLSAI_CHECK_VERSION = '1.1.2';
+const TOOLSAI_CHECK_VERSION = '1.1.3';
 const TOOLSAI_LICENSE_HOST = 'license.bx-shef.by';
 const TOOLSAI_MIN_DISK_GB = 20; // «минимум» из системных требований, свободно сверх Битрикса
 
@@ -27,19 +27,19 @@ function toolsai_required_extensions(): array
     return ['curl', 'json', 'mbstring', 'openssl', 'zlib'];
 }
 
-/** Строка результата: ['ok'|'warn'|'fail'|'info', 'Название', 'Подробности']. */
-function toolsai_row(string $status, string $title, string $detail = ''): array
+/** Строка результата: [статус ok|warn|fail|info, что проверено, найдено, норма, что сделать если не так]. */
+function toolsai_row(string $status, string $title, string $detail = '', string $norm = '', string $hint = ''): array
 {
-    return [$status, $title, $detail];
+    return [$status, $title, $detail, $norm, $hint];
 }
 
 function toolsai_check_php(string $version, array $loaded): array
 {
-    $rows = [toolsai_row('info', 'Версия PHP', $version)];
+    $rows = [toolsai_row('info', 'Версия PHP', $version, 'справочно')];
     foreach (toolsai_required_extensions() as $ext) {
         $rows[] = in_array($ext, $loaded, true)
-            ? toolsai_row('ok', "Расширение $ext", 'есть')
-            : toolsai_row('fail', "Расширение $ext", 'нет — включить в PHP');
+            ? toolsai_row('ok', "Расширение $ext", 'есть', 'должно быть включено')
+            : toolsai_row('fail', "Расширение $ext", 'нет', 'должно быть включено', 'включите расширение $ext в настройках PHP и перезапустите веб-сервер');
     }
     return $rows;
 }
@@ -51,11 +51,11 @@ function toolsai_check_modules(array $installed): array
     foreach (toolsai_min_modules() as $module => $min) {
         $ver = $installed[$module] ?? null;
         if ($ver === null) {
-            $rows[] = toolsai_row('fail', "Модуль $module", 'не установлен');
+            $rows[] = toolsai_row('fail', "Модуль $module", 'не установлен', $min ? "версия не ниже $min" : 'должен быть установлен', 'установите модуль в разделе «Настройки → Настройки продукта → Модули»');
         } elseif ($min !== null && version_compare($ver, $min, '<')) {
-            $rows[] = toolsai_row('fail', "Модуль $module", "версия $ver, нужна $min или новее — обновить");
+            $rows[] = toolsai_row('fail', "Модуль $module", "версия $ver", "версия не ниже $min", 'обновите Битрикс24 в разделе «Настройки → Обновления»');
         } else {
-            $rows[] = toolsai_row('ok', "Модуль $module", 'версия ' . $ver . ($min ? " (нужна ≥ $min)" : ''));
+            $rows[] = toolsai_row('ok', "Модуль $module", 'версия ' . $ver, $min ? "версия не ниже $min" : 'должен быть установлен');
         }
     }
     return $rows;
@@ -64,24 +64,24 @@ function toolsai_check_modules(array $installed): array
 function toolsai_check_cron(bool $agentsOnCron, bool $cronDefined): array
 {
     return ($agentsOnCron && $cronDefined)
-        ? [toolsai_row('ok', 'Агенты на cron', 'включено')]
-        : [toolsai_row('warn', 'Агенты на cron', 'не включено — фоновые задачи модулей идут только по хитам страниц')];
+        ? [toolsai_row('ok', 'Агенты на cron', 'включено', 'включено')]
+        : [toolsai_row('warn', 'Агенты на cron', 'не включено', 'включено', 'переведите агентов на cron: фоновые задачи модулей иначе идут только по обращениям к страницам')];
 }
 
 function toolsai_check_disk(float $freeGb, bool $split = false): array
 {
     $text = round($freeGb, 1) . ' ГБ свободно';
     if ($split) { // Битрикс24 на отдельной ВМ: сервисы стоят на другой, порог не применяется
-        return [toolsai_row('info', 'Диск', $text)];
+        return [toolsai_row('info', 'Диск', $text, 'справочно: сервисы на другой ВМ')];
     }
     return $freeGb >= TOOLSAI_MIN_DISK_GB
-        ? [toolsai_row('ok', 'Диск', $text . ' (нужно +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса)')]
-        : [toolsai_row('fail', 'Диск', $text . '; для своих сервисов нужно +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса')];
+        ? [toolsai_row('ok', 'Диск', $text, 'от +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса')]
+        : [toolsai_row('fail', 'Диск', $text, 'от +' . TOOLSAI_MIN_DISK_GB . ' ГБ сверх Битрикса', 'освободите место или расширьте диск')];
 }
 
 function toolsai_check_memory(string $limit): array
 {
-    return [toolsai_row('info', 'Память PHP (memory_limit)', $limit === '-1' ? 'без ограничения' : $limit)];
+    return [toolsai_row('info', 'Память PHP (memory_limit)', $limit === '-1' ? 'без ограничения' : $limit, 'справочно')];
 }
 
 /** @param array<string,bool|null> $reach хост => доступен (null — не проверялся) */
@@ -90,11 +90,11 @@ function toolsai_check_network(array $reach): array
     $rows = [];
     foreach ($reach as $host => $ok) {
         if ($ok === null) {
-            $rows[] = toolsai_row('info', "HTTPS до $host", 'не проверялся');
+            $rows[] = toolsai_row('info', "HTTPS до $host", 'не проверялся', 'добавьте ?model=https://адрес-модели, если нужна своя модель');
         } else {
             $rows[] = $ok
-                ? toolsai_row('ok', "HTTPS до $host", 'доступен')
-                : toolsai_row('fail', "HTTPS до $host", 'нет соединения — открыть исходящий доступ');
+                ? toolsai_row('ok', "HTTPS до $host", 'доступен', 'исходящий доступ открыт')
+                : toolsai_row('fail', "HTTPS до $host", 'нет соединения', 'исходящий доступ открыт', 'откройте исходящий HTTPS (порт 443) до этого адреса в файрволе и прокси');
         }
     }
     return $rows;
@@ -104,9 +104,9 @@ function toolsai_check_network(array $reach): array
 function toolsai_summary(array $rows): array
 {
     $missing = [];
-    foreach ($rows as [$status, $title, $detail]) {
+    foreach ($rows as [$status, $title, $detail, $norm, $hint]) {
         if ($status === 'fail') {
-            $missing[] = $title . ($detail !== '' ? ': ' . $detail : '');
+            $missing[] = $title . ($detail !== '' ? ': ' . $detail : '') . ($norm !== '' ? ' (норма: ' . $norm . ')' : '') . ($hint !== '' ? ' → ' . $hint : '');
         }
     }
     return ['done' => $missing === [], 'missing' => $missing];
@@ -143,18 +143,31 @@ function toolsai_render(array $sections, array $summary, bool $canDelete): strin
     $out = '<!doctype html><meta charset="utf-8"><title>Tools AI — проверка сервера</title>'
         . '<style>body{font:15px sans-serif;margin:2em auto;max-width:760px}table{border-collapse:collapse;width:100%}'
         . 'td{border-bottom:1px solid #ddd;padding:6px}h2{margin-top:1.4em}.done{color:#1a7f37}.miss{color:#c62828}</style>'
-        . '<h1>Tools AI — проверка сервера</h1><p>Файл только читает. Версия ' . TOOLSAI_CHECK_VERSION . '.</p>';
+        . '<h1>Tools AI — проверка сервера</h1><p>Файл только читает: ничего не меняет и не отправляет. Версия ' . TOOLSAI_CHECK_VERSION . '.</p>'
+        . '<p>✅ в порядке, ⚠️ стоит проверить, ❌ нужно исправить, ℹ️ справочно.</p>';
     foreach ($sections as $title => $rows) {
-        $out .= '<h2>' . $h((string)$title) . '</h2><table>';
-        foreach ($rows as [$st, $name, $detail]) {
-            $out .= '<tr><td width="40">' . $icon[$st] . '</td><td>' . $h($name) . '</td><td>' . $h($detail) . '</td></tr>';
+        $out .= '<h2>' . $h((string)$title) . '</h2><table><tr><th></th><th>Проверено</th><th>Найдено</th><th>Норма</th></tr>';
+        foreach ($rows as $row) {
+            [$st, $name, $detail] = $row;
+            $norm = $row[3] ?? '';
+            $hint = $row[4] ?? '';
+            $out .= '<tr><td width="40">' . $icon[$st] . '</td><td>' . $h($name) . '</td><td>' . $h($detail) . '</td><td>' . $h($norm) . '</td></tr>';
+            if ($hint !== '' && $st !== 'ok' && $st !== 'info') {
+                $out .= '<tr><td></td><td colspan="3">→ ' . $h($hint) . '</td></tr>';
+            }
         }
         $out .= '</table>';
     }
-    $out .= $summary['done']
-        ? '<h2 class="done">Итог: готово</h2>'
-        : '<h2 class="miss">Итог: не хватает: ' . $h(implode('; ', $summary['missing'])) . '</h2>';
-    $out .= '<p>Для своих сервисов (распознавание, лёгкая модель, файлы) запустите на сервере <code>sudo bash toolsai_check.sh</code>.</p>';
+    if ($summary['done']) {
+        $out .= '<h2 class="done">Итог: готово — портал подходит для Tools AI.</h2>';
+    } else {
+        $out .= '<h2 class="miss">Итог: не готов к Tools AI. Исправьте:</h2><ul>';
+        foreach ($summary['missing'] as $m) {
+            $out .= '<li>' . $h($m) . '</li>';
+        }
+        $out .= '</ul>';
+    }
+    $out .= '<p>Для своих сервисов (распознавание, лёгкая модель, файлы) запустите на сервере проверку <code>toolsai_check.sh</code> (см. README).</p>';
     if ($canDelete) {
         $out .= '<form method="post"><input type="hidden" name="sessid" value="' . $h(bitrix_sessid()) . '">'
             . '<button name="delete_self" value="1">Удалить файл</button></form>';
