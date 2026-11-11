@@ -31,4 +31,9 @@ ARGS=""
 # код не содержит имён хоста/адресов
 out=$(env $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1 bash toolsai_check.sh | tail -1)
 case $out in "TAI1;"*) echo "ok   строка-код";; *) echo "FAIL строка-код: $out"; fail=1;; esac
+# версия в скриптах = последняя в CHANGELOG
+cl=$(grep -m1 '^## ' CHANGELOG.md | sed 's/^## //' | tr -d '\r')
+shv=$(sed -n 's/^VERSION="\(.*\)"/\1/p' toolsai_check.sh)
+phpv=$(sed -n "s/.*TOOLSAI_CHECK_VERSION = '\(.*\)';.*/\1/p" toolsai_check.php | tr -d '\r')
+if [ "$cl" = "$shv" ] && [ "$cl" = "$phpv" ]; then echo "ok   версия $cl"; else echo "FAIL версия: changelog=$cl sh=$shv php=$phpv"; fail=1; fi
 exit $fail
