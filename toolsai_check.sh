@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Tools AI — проверка сервера для своих сервисов. Только читает, ничего не меняет и не отправляет.
-# Запуск: sudo bash toolsai_check.sh
+# Запуск: curl -fsSL https://github.com/bx-shef/toolsai-server-check/releases/latest/download/toolsai_check.sh | bash
 # Пороги — из системных требований Tools AI (три уровня: минимум / средний / с запасом).
 
-VERSION="1.1.2"
+VERSION="1.1.3"
 
 # Уровни: ядра / память ГБ / диск ГБ свободно сверх Битрикса
 MIN_CORES=8;  MIN_MEM=16; MIN_DISK=20
@@ -62,8 +62,13 @@ levels_text() { # cores|mem|disk — пороги текущего режима
   if [ "$MODE" = svc ]; then echo "$a / $b"; else echo "$a / $b / $c"; fi
 }
 
-mark() { # ok|warn|fail text
-  case $1 in ok) printf '  ✅ %s\n' "$2";; warn) printf '  ⚠  %s\n' "$2";; fail) printf '  ❌ %s\n' "$2";; esac
+# Строка проверки: статус, что проверено, найдено, норма; при проблеме — что сделать.
+# Статусы: ✓ в порядке, ⚠ стоит проверить, ✗ не хватает.
+check_line() { # ok|warn|fail "что проверено" "найдено" "норма" "что сделать"
+  local sign
+  case $1 in ok) sign="✓";; warn) sign="⚠";; *) sign="✗";; esac
+  printf '  %s %s: %s (норма %s)\n' "$sign" "$2" "$3" "$4"
+  [ "$1" != ok ] && [ -n "${5:-}" ] && printf '      → %s\n' "$5"
 }
 
 main() {
@@ -73,49 +78,78 @@ main() {
     MID_CORES=$SVC_MID_CORES; MID_MEM=$SVC_MID_MEM; MID_DISK=$SVC_MID_DISK
     FUL_CORES=999; FUL_MEM=9999; FUL_DISK=9999
   fi
-  local cores mem disk avx2 docker virt ports lvl missing=() warns=()
+  local cores mem disk avx2 docker virt ports lvl todo=() warns=()
   cores=$(detect_cores); mem=$(detect_mem_gb); disk=$(detect_disk_gb)
   avx2=$(detect_avx2); docker=$(detect_docker); virt=$(detect_virt); ports=$(detect_ports)
   [ "$avx2" -gt 0 ] 2>/dev/null && avx2=1 || avx2=0
 
-  echo "Tools AI — проверка сервера (toolsai_check.sh $VERSION). Скрипт только читает."
+  echo "Tools AI — проверка сервера (toolsai_check.sh $VERSION). Скрипт только читает, ничего не меняет и не отправляет."
   echo
   if [ "$MODE" = svc ]; then
     echo "Режим: отдельная ВМ только под сервисы (Битрикс24 на другой ВМ)."
-    echo "Ресурсы (нужно для минимума / среднего):"
   else
     echo "Режим: Битрикс24 и сервисы на одной ВМ."
-    echo "Ресурсы (нужно для минимума / среднего / запаса):"
   fi
-  if [ "$cores" -ge $MIN_CORES ]; then mark ok "Ядра: $cores ($(levels_text cores))"; else mark fail "Ядра: $cores (минимум $MIN_CORES)"; missing+=("ядра: нужно минимум $MIN_CORES, есть $cores"); fi
-  if [ "$mem" -ge $MIN_MEM ]; then mark ok "Память: $mem ГБ ($(levels_text mem))"; else mark fail "Память: $mem ГБ (минимум $MIN_MEM)"; missing+=("память: нужно минимум $MIN_MEM ГБ, есть $mem"); fi
-  if [ "$disk" -ge $MIN_DISK ]; then mark ok "Диск, свободно: $disk ГБ ($(levels_text disk))"; else mark fail "Диск, свободно: $disk ГБ (нужно +$MIN_DISK сверх Битрикса)"; missing+=("диск: нужно минимум +$MIN_DISK ГБ свободно, есть $disk"); fi
-  if [ "$avx2" = 1 ]; then mark ok "Процессор: AVX2 есть"; else mark fail "Процессор: AVX2 нет (модели не запустятся)"; missing+=("процессор без AVX2: другой хост или тип процессора"); fi
+  echo "Знаки: ✓ в порядке, ⚠ стоит проверить, ✗ нужно исправить."
+  echo
+  echo "Ресурсы (норма: минимум / средний$( [ "$MODE" = svc ] || echo ' / запас')):"
+  if [ "$cores" -ge $MIN_CORES ]; then
+    check_line ok "Ядра процессора" "$cores" "$(levels_text cores)"
+  else
+    check_line fail "Ядра процессора" "$cores" "от $MIN_CORES" "добавьте ядра виртуальной машине или возьмите сервер мощнее"
+    todo+=("ядра: есть $cores, нужно от $MIN_CORES")
+  fi
+  if [ "$mem" -ge $MIN_MEM ]; then
+    check_line ok "Память" "$mem ГБ" "$(levels_text mem)"
+  else
+    check_line fail "Память" "$mem ГБ" "от $MIN_MEM ГБ" "увеличьте память виртуальной машины"
+    todo+=("память: есть $mem ГБ, нужно от $MIN_MEM ГБ")
+  fi
+  if [ "$disk" -ge $MIN_DISK ]; then
+    check_line ok "Свободный диск" "$disk ГБ" "$(levels_text disk) ГБ сверх Битрикса"
+  else
+    check_line fail "Свободный диск" "$disk ГБ" "от +$MIN_DISK ГБ сверх Битрикса" "освободите место или расширьте диск"
+    todo+=("диск: свободно $disk ГБ, нужно от $MIN_DISK ГБ")
+  fi
+  if [ "$avx2" = 1 ]; then
+    check_line ok "Процессор, AVX2" "есть" "нужна поддержка AVX2"
+  else
+    check_line fail "Процессор, AVX2" "нет — модели не запустятся" "нужна поддержка AVX2" "включите передачу возможностей процессора виртуальной машине (тип CPU host) или смените хост"
+    todo+=("процессор без AVX2: смените тип процессора ВМ или хост")
+  fi
 
   echo
   echo "Окружение:"
-  if [ "$docker" = 1 ]; then mark ok "Docker: установлен"; else mark warn "Docker: не найден (нужен для своих сервисов; можно поставить)"; warns+=("docker не установлен"); fi
+  if [ "$docker" = 1 ]; then
+    check_line ok "Docker" "установлен" "должен быть для своих сервисов"
+  else
+    check_line warn "Docker" "не найден" "нужен для своих сервисов" "установите Docker (если свои сервисы не нужны — можно пропустить)"
+    warns+=("Docker не установлен: нужен, если запускаете свои сервисы")
+  fi
   case $virt in
-    lxc) mark warn "Виртуализация: lxc — на хосте нужны nesting=1 и keyctl=1 (подтвердить у администратора хоста)"; warns+=("lxc: nesting=1, keyctl=1");;
-    kvm|none) mark ok "Виртуализация: $virt";;
-    *) mark warn "Виртуализация: $virt";;
+    lxc) check_line warn "Виртуализация" "lxc" "в LXC нужны nesting=1 и keyctl=1" "включите nesting=1 и keyctl=1 в настройках контейнера на хосте"
+         warns+=("lxc: включите nesting=1 и keyctl=1 на хосте");;
+    kvm|none) check_line ok "Виртуализация" "$virt" "kvm, none или другая полная";;
+    *) check_line warn "Виртуализация" "$virt" "определить тип не удалось" "если это LXC — нужны nesting=1 и keyctl=1 на хосте"
+       warns+=("тип виртуализации не определён: если это LXC — нужны nesting=1 и keyctl=1");;
   esac
-  [ -n "$ports" ] && echo "  ℹ  Занятые порты (TCP): $ports"
+  [ -n "$ports" ] && echo "  ℹ Занятые порты (TCP): $ports. Порты сервисов не должны пересекаться с ними."
 
   lvl=$(level_of "$cores" "$mem" "$disk"); [ "$avx2" = 1 ] || lvl=none
   echo
   echo "Уровень по ресурсам: $(level_name "$lvl")"
-  if [ ${#missing[@]} -eq 0 ]; then
-    echo "Итог: готово"
-  else
-    local IFS=';'; echo "Итог: не хватает: ${missing[*]}"
-  fi
-  [ ${#warns[@]} -gt 0 ] && { local IFS=';'; echo "Проверить: ${warns[*]}"; }
-
-  local ok=0; [ ${#missing[@]} -eq 0 ] && ok=1
   echo
-  echo "Строка для отправки нам (без имён, адресов и ключей):"
-  echo "TAI1;mode=$MODE;cpu=$cores;mem=$mem;disk=$disk;avx2=$avx2;docker=$docker;virt=$virt;level=$lvl;ok=$ok"
+  echo "=== Сводка ==="
+  if [ ${#todo[@]} -eq 0 ]; then
+    echo "Итог: готово — сервер подходит для Tools AI."
+  else
+    echo "Итог: не готов к Tools AI. Исправьте:"
+    local t; for t in "${todo[@]}"; do echo "  ✗ $t"; done
+  fi
+  if [ ${#warns[@]} -gt 0 ]; then
+    echo "Проверьте:"
+    local w; for w in "${warns[@]}"; do echo "  ⚠ $w"; done
+  fi
 }
 
 # Выполняется только при запуске файла, а не при source (тесты).

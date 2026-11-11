@@ -47,5 +47,5 @@ t('кнопка удаления с сессией', str_contains($html, 'delete
 t('итог в выводе', str_contains($html, 'Итог: готово'));
 t('без кнопки', !str_contains(toolsai_render([], ['done' => true, 'missing' => []], false), 'delete_self'));
 $bad = toolsai_render([], ['done' => false, 'missing' => ['диск']], false);
-t('не хватает в выводе', str_contains($bad, 'Итог: не хватает: диск'));
+t('не хватает в выводе', str_contains($bad, 'Итог: не готов к Tools AI. Исправьте:') && str_contains($bad, 'диск'));
 exit($fail);
