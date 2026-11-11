@@ -1,6 +1,6 @@
 <?php
 /**
- * Tools AI — проверка портала Битрикс24 («Проверить свой сервер»).
+ * Tools AI — проверка портала Битрикс24.
  *
  * Положить в корень портала (/home/bitrix/www/), открыть https://ваш-портал/toolsai_check.php
  * под администратором. Файл только читает: ничего не меняет и не отправляет данных.
@@ -11,7 +11,7 @@
  * (сервисы проверяются на своей ВМ: sudo bash toolsai_check.sh --services-only).
  */
 
-const TOOLSAI_CHECK_VERSION = '1.1.3';
+const TOOLSAI_CHECK_VERSION = '1.1.4';
 const TOOLSAI_LICENSE_HOST = 'license.bx-shef.by';
 const TOOLSAI_MIN_DISK_GB = 20; // «минимум» из системных требований, свободно сверх Битрикса
 
