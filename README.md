@@ -202,4 +202,4 @@ bash tests/test_sh.sh
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE).
+Все права защищены, права у ООО «БэИксШефБай»; условия — в [LICENSE](LICENSE).
