@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Tools AI — проверка сервера. Только читает, ничего не меняет и не отправляет.
 # Запуск: curl -fsSL https://github.com/bx-shef/toolsai-server-check/releases/latest/download/toolsai_check.sh | bash
+# Флаги (складываются): --services-only — отдельная ВМ под сервисы; --vision — со зрением (картинки).
 # Пороги — из системных требований Tools AI: минимум, средний, с запасом.
 
-VERSION="1.1.4"
+VERSION="1.2.0"
 
 # Уровни: ядра / память ГБ / диск ГБ свободно сверх Битрикса
 MIN_CORES=8;  MIN_MEM=16; MIN_DISK=20
@@ -15,6 +16,11 @@ FUL_CORES=16; FUL_MEM=32; FUL_DISK=50
 SVC_MIN_CORES=6;  SVC_MIN_MEM=10; SVC_MIN_DISK=20
 SVC_MID_CORES=10; SVC_MID_MEM=13; SVC_MID_DISK=30
 MODE=all
+
+# Флаг --vision: зрение — модель для картинок (toolsai-light, COMPOSE_PROFILES=vision), по желанию.
+# Добавка к каждому уровню: ядра на время разбора картинки / память ГБ (лимит контейнера) / диск ГБ под веса.
+VIS_CORES=4; VIS_MEM=5; VIS_DISK=3
+VISION=0
 
 # Переопределения нужны тестам (подставляют значения вместо чтения системы).
 detect_cores() { [ -n "${TOOLSAI_CHECK_CORES:-}" ] && { echo "$TOOLSAI_CHECK_CORES"; return; }; nproc 2>/dev/null || echo 0; }
@@ -72,11 +78,22 @@ check_line() { # ok|warn|fail "что проверено" "найдено" "но
 }
 
 main() {
-  if [ "${1:-}" = "--services-only" ]; then
-    MODE=svc
+  local arg
+  for arg in "$@"; do
+    case $arg in
+      --services-only) MODE=svc ;;
+      --vision) VISION=1 ;;
+    esac
+  done
+  if [ "$MODE" = svc ]; then
     MIN_CORES=$SVC_MIN_CORES; MIN_MEM=$SVC_MIN_MEM; MIN_DISK=$SVC_MIN_DISK
     MID_CORES=$SVC_MID_CORES; MID_MEM=$SVC_MID_MEM; MID_DISK=$SVC_MID_DISK
     FUL_CORES=999; FUL_MEM=9999; FUL_DISK=9999
+  fi
+  if [ "$VISION" = 1 ]; then
+    MIN_CORES=$((MIN_CORES + VIS_CORES)); MIN_MEM=$((MIN_MEM + VIS_MEM)); MIN_DISK=$((MIN_DISK + VIS_DISK))
+    MID_CORES=$((MID_CORES + VIS_CORES)); MID_MEM=$((MID_MEM + VIS_MEM)); MID_DISK=$((MID_DISK + VIS_DISK))
+    FUL_CORES=$((FUL_CORES + VIS_CORES)); FUL_MEM=$((FUL_MEM + VIS_MEM)); FUL_DISK=$((FUL_DISK + VIS_DISK))
   fi
   local cores mem disk avx2 docker virt ports lvl todo=() warns=()
   cores=$(detect_cores); mem=$(detect_mem_gb); disk=$(detect_disk_gb)
@@ -90,6 +107,7 @@ main() {
   else
     echo "Режим: Битрикс24 и сервисы на одной ВМ."
   fi
+  [ "$VISION" = 1 ] && echo "Со зрением (картинки): к нормам добавлено $VIS_CORES ядра, $VIS_MEM ГБ памяти и $VIS_DISK ГБ диска."
   echo "Знаки: ✓ в порядке, ⚠ стоит проверить, ✗ нужно исправить."
   echo
   echo "Ресурсы (норма: минимум / средний$( [ "$MODE" = svc ] || echo ' / запас')):"

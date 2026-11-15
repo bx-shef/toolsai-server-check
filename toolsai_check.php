@@ -11,7 +11,7 @@
  * (сервисы проверяются на своей ВМ: sudo bash toolsai_check.sh --services-only).
  */
 
-const TOOLSAI_CHECK_VERSION = '1.1.4';
+const TOOLSAI_CHECK_VERSION = '1.2.0';
 const TOOLSAI_LICENSE_HOST = 'license.bx-shef.by';
 const TOOLSAI_MIN_DISK_GB = 20; // «минимум» из системных требований, свободно сверх Битрикса
 

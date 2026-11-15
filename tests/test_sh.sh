@@ -27,7 +27,23 @@ run "svc: уровня запаса нет" "Уровень по ресурса�
 run "svc: 5 ядер мало" "Итог: не готов" $base TOOLSAI_CHECK_CORES=5 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=50 TOOLSAI_CHECK_AVX2=1
 run "svc: 8/16 хватает (в режиме all — минимум)" "Итог: готово" $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=11 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1
 run "svc: заголовок" "только под сервисы" $base TOOLSAI_CHECK_CORES=6 TOOLSAI_CHECK_MEM_GB=10 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1
+# флаг --vision: зрение (картинки) — к каждому уровню +4 ядра, +5 ГБ памяти, +3 ГБ диска
+ARGS="--vision"
+run "vision: заголовок" "Со зрением (картинки)" $base TOOLSAI_CHECK_CORES=12 TOOLSAI_CHECK_MEM_GB=21 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "vision: нормы ядер" "Ядра процессора: 12 (норма 12 / 16 / 20)" $base TOOLSAI_CHECK_CORES=12 TOOLSAI_CHECK_MEM_GB=21 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "vision: 12/21/23 минимум" "Уровень по ресурсам: минимум" $base TOOLSAI_CHECK_CORES=12 TOOLSAI_CHECK_MEM_GB=21 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "vision: 8 ядер мало" "✗ ядра: есть 8, нужно от 12" $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1
+run "vision: 20 ГБ мало" "✗ память: есть 20 ГБ, нужно от 21 ГБ" $base TOOLSAI_CHECK_CORES=12 TOOLSAI_CHECK_MEM_GB=20 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "vision: 22 ГБ диска мало" "✗ диск: свободно 22 ГБ, нужно от 23 ГБ" $base TOOLSAI_CHECK_CORES=12 TOOLSAI_CHECK_MEM_GB=21 TOOLSAI_CHECK_DISK_GB=22 TOOLSAI_CHECK_AVX2=1
+run "vision: с запасом" "Уровень по ресурсам: с запасом" $base TOOLSAI_CHECK_CORES=20 TOOLSAI_CHECK_MEM_GB=37 TOOLSAI_CHECK_DISK_GB=53 TOOLSAI_CHECK_AVX2=1
+ARGS="--services-only --vision"
+run "svc+vision: нормы" "Ядра процессора: 10 (норма 10 / 14)" $base TOOLSAI_CHECK_CORES=10 TOOLSAI_CHECK_MEM_GB=15 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "svc+vision: режим" "только под сервисы" $base TOOLSAI_CHECK_CORES=10 TOOLSAI_CHECK_MEM_GB=15 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
+run "svc+vision: 14 ГБ мало" "✗ память: есть 14 ГБ, нужно от 15 ГБ" $base TOOLSAI_CHECK_CORES=10 TOOLSAI_CHECK_MEM_GB=14 TOOLSAI_CHECK_DISK_GB=23 TOOLSAI_CHECK_AVX2=1
 ARGS=""
+# без --vision строки о зрении нет
+out=$(env $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1 bash toolsai_check.sh)
+if grep -qF "Со зрением" <<<"$out"; then echo "FAIL строка о зрении без --vision"; fail=1; else echo "ok   без --vision нормы прежние"; fi
 # код не содержит имён хоста/адресов
 out=$(env $base TOOLSAI_CHECK_CORES=8 TOOLSAI_CHECK_MEM_GB=16 TOOLSAI_CHECK_DISK_GB=20 TOOLSAI_CHECK_AVX2=1 bash toolsai_check.sh)
 if grep -qE "TAI1|Пришлите|пришлите" <<<"$out"; then echo "FAIL просьба прислать результат"; fail=1; else echo "ok   нечего присылать"; fi
