@@ -46,7 +46,7 @@ bash toolsai_check.sh
 curl -fsSL https://github.com/bx-shef/toolsai-server-check/releases/latest/download/toolsai_check.sh | bash -s -- --services-only
 ```
 
-Со зрением — моделью, которая читает картинки (включается по желанию), — флаг `--vision`: нормы выше на 4 ядра, 5 ГБ памяти и 3 ГБ диска. Флаги складываются: `--services-only --vision`.
+Со зрением — моделью, которая читает картинки ([toolsai-vision](https://github.com/bx-shef/toolsai-vision), включается по желанию), — флаг `--vision`: нормы выше на 4 ядра, 5 ГБ памяти и 3 ГБ диска. Флаги складываются: `--services-only --vision`.
 
 ```bash
 curl -fsSL https://github.com/bx-shef/toolsai-server-check/releases/latest/download/toolsai_check.sh | bash -s -- --vision

@@ -17,7 +17,7 @@ SVC_MIN_CORES=6;  SVC_MIN_MEM=10; SVC_MIN_DISK=20
 SVC_MID_CORES=10; SVC_MID_MEM=13; SVC_MID_DISK=30
 MODE=all
 
-# Флаг --vision: зрение — модель для картинок (toolsai-light, COMPOSE_PROFILES=vision), по желанию.
+# Флаг --vision: зрение — модель для картинок (bx-shef/toolsai-vision), по желанию.
 # Добавка к каждому уровню: ядра на время разбора картинки / память ГБ (лимит контейнера) / диск ГБ под веса.
 VIS_CORES=4; VIS_MEM=5; VIS_DISK=3
 VISION=0
